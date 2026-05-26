@@ -1,0 +1,16 @@
+# Environnements virtuels & cache
+venv/
+.env
+__pycache__/
+.streamlit/secrets.toml
+.DS_Store
+*.pyc
+*.pyo
+*.pyd
+
+# Modèles et données
+*.h5
+docs/
+notebook/
+data/
+

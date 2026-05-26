@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        /* ====== Reset & base ====== */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: 'Source Sans Pro', -apple-system, BlinkMacSystemFont, sans-serif;
+            padding: 0;
+            background: transparent;
+        }
+
+        #board { padding: 4px 8px; }
+
+        /* ====== Source zones row (3 columns) ====== */
+        .sources-row {
+            display: flex;
+            gap: 14px;
+            margin-bottom: 18px;
+        }
+
+        /* ====== Individual zone container ====== */
+        .zone {
+            flex: 1;
+            background: #f0f2f6;
+            border-radius: 10px;
+            padding: 14px;
+            min-height: 180px;
+        }
+
+        .zone-header {
+            font-size: 15px;
+            font-weight: 700;
+            color: #31333F;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #d1d5db;
+        }
+
+        /* ====== Card list (sortable container) ====== */
+        .card-list {
+            min-height: 60px;
+        }
+
+        /* ====== Cards ====== */
+        .card {
+            padding: 10px 14px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            cursor: grab;
+            font-size: 13px;
+            color: white;
+            font-weight: 500;
+            user-select: none;
+            transition: transform 0.1s ease, box-shadow 0.1s ease;
+            line-height: 1.4;
+        }
+        .card:last-child { margin-bottom: 0; }
+        .card:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+        }
+        .card:active { cursor: grabbing; }
+
+        /* Card colors by type */
+        .card[data-type="urs"]      { background: #187499; }
+        .card[data-type="risques"]  { background: #eb5352; }
+        .card[data-type="criteres"] { background: #35AE7B }
+
+        /* SortableJS drag states */
+        .ghost  { opacity: 0.3; }
+        .drag   { transform: scale(1.04); box-shadow: 0 10px 30px rgba(0,0,0,0.25); }
+        .chosen { box-shadow: 0 4px 15px rgba(68, 56, 56, 0.2); }
+
+        /* ====== Workspace container ====== */
+        .workspace-container {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 14px;
+        }
+
+        /* ====== Individual workspace quadrant ====== */
+        .workspace-quadrant {
+            background: #f0f2f6;
+            border-radius: 10px;
+            padding: 14px;
+            border: 1px solid #d1d5db;
+            transition: border-color 0.3s, background 0.3s;
+        }
+
+        .workspace-quadrant .zone-header {
+            font-size: 14px;
+            font-weight: 700;
+            color: #31333F;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #d1d5db;
+        }
+
+        .workspace-quadrant .card-list {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            grid-template-rows: repeat(8, auto);
+            gap: 6px;
+            align-content: flex-start;
+            min-height: 120px;
+        }
+
+        .workspace-quadrant .card {
+            margin-bottom: 0;
+            font-size: 11px;
+            padding: 8px 10px;
+        }
+
+        /* Placeholder text in empty quadrant */
+        .placeholder {
+            grid-column: 1 / -1;
+            color: #9ca3af;
+            text-align: center;
+            padding: 30px 10px;
+            font-style: italic;
+            font-size: 13px;
+            pointer-events: none;
+        }
+
+        /* Visual feedback: highlight quadrant when dragging over it */
+        .workspace-quadrant.drag-hover {
+            border-color: #1f77b4;
+            background: #e8edf5;
+        }
+    </style>
+</head>
+<body>
+    <div id="board">
+        <!-- ====== 3 Source zones (top) ====== -->
+        <div class="sources-row">
+            <div class="zone" id="zone-risques">
+                <div class="zone-header">Risques</div>
+                <div class="card-list" id="list-risques"></div>
+            </div>
+            <div class="zone" id="zone-urs">
+                <div class="zone-header">URS</div>
+                <div class="card-list" id="list-urs"></div>
+            </div>
+            <div class="zone" id="zone-criteres">
+                <div class="zone-header">Critères d'acceptation</div>
+                <div class="card-list" id="list-criteres"></div>
+            </div>
+        </div>
+
+        <!-- ====== Workspace : 4 quadrants thématiques ====== -->
+        <div class="workspace-container">
+            <div class="workspace-quadrant" id="zone-workspace_usage">
+                <div class="zone-header">Usage &amp; Finalité métier</div>
+                <div class="card-list" id="list-workspace_usage">
+                    <div class="placeholder" id="ph-workspace_usage">Risques&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;URS&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Critère d'acceptation </div>
+                </div>
+            </div>
+            <div class="workspace-quadrant" id="zone-workspace_interaction">
+                <div class="zone-header">Interaction Utilisateur</div>
+                <div class="card-list" id="list-workspace_interaction">
+                    <div class="placeholder" id="ph-workspace_interaction">Risques&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;URS&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Critère d'acceptation </div>
+                </div>
+            </div>
+            <div class="workspace-quadrant" id="zone-workspace_tracabilite">
+                <div class="zone-header">Traçabilité &amp; Auditabilité</div>
+                <div class="card-list" id="list-workspace_tracabilite">
+                    <div class="placeholder" id="ph-workspace_tracabilite">Risques&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;URS&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Critère d'acceptation  </div>
+                </div>
+            </div>
+            <div class="workspace-quadrant" id="zone-workspace_infra">
+                <div class="zone-header">Infrastructure technique</div>
+                <div class="card-list" id="list-workspace_infra">
+                    <div class="placeholder" id="ph-workspace_infra">Risques&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;URS&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;|&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Critère d'acceptation </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SortableJS from CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
+
+    <script>
+    // ==========================================================
+    // Streamlit Component Communication Shim
+    // Implements the minimal postMessage protocol so this HTML
+    // can act as a bidirectional Streamlit custom component.
+    // ==========================================================
+    (function() {
+        var Streamlit = {
+            RENDER_EVENT: "streamlit:render",
+            events: new EventTarget(),
+
+            /** Signal to Streamlit that the component is ready to receive render data */
+            setComponentReady: function() {
+                window.parent.postMessage({
+                    isStreamlitMessage: true,
+                    type: "streamlit:componentReady",
+                    apiVersion: 1
+                }, "*");
+            },
+
+            /** Send a value back to the Python side (triggers a Streamlit rerun) */
+            setComponentValue: function(value) {
+                window.parent.postMessage({
+                    isStreamlitMessage: true,
+                    type: "streamlit:setComponentValue",
+                    value: value,
+                    dataType: "json"
+                }, "*");
+            },
+
+            /** Inform Streamlit of the iframe's desired height */
+            setFrameHeight: function(height) {
+                height = height || document.documentElement.scrollHeight;
+                window.parent.postMessage({
+                    isStreamlitMessage: true,
+                    type: "streamlit:setFrameHeight",
+                    height: height
+                }, "*");
+            }
+        };
+
+        // Relay render messages from the Streamlit parent as DOM events
+        window.addEventListener("message", function(event) {
+            if (event.data && event.data.type === "streamlit:render") {
+                Streamlit.events.dispatchEvent(
+                    new CustomEvent(Streamlit.RENDER_EVENT, { detail: event.data })
+                );
+            }
+        });
+
+        window.Streamlit = Streamlit;
+    })();
+
+    // ==========================================================
+    // Kanban Board Logic
+    // ==========================================================
+
+    var ZONES = ["urs", "risques", "criteres", "workspace_usage", "workspace_interaction", "workspace_tracabilite", "workspace_infra"];
+    var WORKSPACE_ZONES = ["workspace_usage", "workspace_interaction", "workspace_tracabilite", "workspace_infra"];
+    var initialized = false;
+    var lastResetCounter = -1;
+
+    /** Create a card DOM element from a card data object */
+    function createCard(card) {
+        var el = document.createElement("div");
+        el.className = "card";
+        el.dataset.id = card.id;
+        el.dataset.label = card.label;
+        el.dataset.type = card.type;
+        el.textContent = card.label;
+        return el;
+    }
+
+    /** Render the full board from a state object */
+    function renderBoard(state) {
+        ZONES.forEach(function(zone) {
+            var list = document.getElementById("list-" + zone);
+            // Remove existing cards (keep placeholder for workspace)
+            var cards = list.querySelectorAll(".card");
+            for (var i = 0; i < cards.length; i++) cards[i].remove();
+            // Insert new cards
+            var items = state[zone] || [];
+            items.forEach(function(card) {
+                list.appendChild(createCard(card));
+            });
+        });
+        updatePlaceholder();
+    }
+
+    /** Show or hide placeholders in each workspace quadrant */
+    function updatePlaceholder() {
+        WORKSPACE_ZONES.forEach(function(zone) {
+            var list = document.getElementById("list-" + zone);
+            var ph = document.getElementById("ph-" + zone);
+            if (ph && list) {
+                ph.style.display = list.querySelectorAll(".card").length > 0 ? "none" : "block";
+            }
+        });
+    }
+
+    /** Read the current board state from the DOM */
+    function getState() {
+        var state = {};
+        ZONES.forEach(function(zone) {
+            var list = document.getElementById("list-" + zone);
+            state[zone] = Array.from(list.querySelectorAll(".card")).map(function(c) {
+                return { id: c.dataset.id, label: c.dataset.label, type: c.dataset.type };
+            });
+        });
+        return state;
+    }
+
+    /** Send current state to Python (debounced to avoid rapid-fire reruns) */
+    var sendTimeout = null;
+    function sendState() {
+        clearTimeout(sendTimeout);
+        sendTimeout = setTimeout(function() {
+            Streamlit.setComponentValue(getState());
+        }, 250);
+    }
+
+    /** Initialize SortableJS on every zone */
+    function initSortable() {
+        ZONES.forEach(function(zone) {
+            var el = document.getElementById("list-" + zone);
+            new Sortable(el, {
+                group: "kanban",       // allows dragging between all zones
+                animation: 200,
+                easing: "cubic-bezier(0.25, 1, 0.5, 1)",
+                ghostClass: "ghost",
+                dragClass: "drag",
+                chosenClass: "chosen",
+                filter: ".placeholder", // ignore the placeholder element
+                onEnd: function() {
+                    updatePlaceholder();
+                    sendState();
+                }
+            });
+        });
+
+        // Visual feedback: highlight workspace quadrants when dragging over them
+        WORKSPACE_ZONES.forEach(function(zone) {
+            var quadrant = document.getElementById("zone-" + zone);
+            var list = document.getElementById("list-" + zone);
+            list.addEventListener("dragenter", function() { quadrant.classList.add("drag-hover"); });
+            list.addEventListener("dragleave", function(e) {
+                if (!list.contains(e.relatedTarget)) quadrant.classList.remove("drag-hover");
+            });
+            list.addEventListener("drop", function() { quadrant.classList.remove("drag-hover"); });
+        });
+    }
+
+    // ==========================================================
+    // Streamlit lifecycle: handle render events
+    // ==========================================================
+    function onRender(event) {
+        var args = (event.detail && event.detail.args) || {};
+        var resetCounter = args.reset_counter || 0;
+
+        // Re-render from Python state only on first load or after a Reset
+        if (!initialized || resetCounter !== lastResetCounter) {
+            if (args.cards_state) {
+                renderBoard(args.cards_state);
+            }
+            if (!initialized) {
+                initSortable();
+            }
+            initialized = true;
+            lastResetCounter = resetCounter;
+        }
+
+        // Always update frame height so Streamlit sizes the iframe correctly
+        Streamlit.setFrameHeight();
+    }
+
+    Streamlit.events.addEventListener(Streamlit.RENDER_EVENT, onRender);
+    Streamlit.setComponentReady();
+    </script>
+</body>
+</html>

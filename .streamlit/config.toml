@@ -1,0 +1,16 @@
+[theme]
+primaryColor = "#4F8BF9"
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F0F2F6"
+textColor = "#262730"
+
+[server]
+headless = true
+address = "127.0.0.1"      # écoute locale, exposée par Nginx
+port = 8501
+enableCORS = false         # proxy gère l’origine
+enableXsrfProtection = true
+runOnSave = false
+
+[browser]
+gatherUsageStats = false
