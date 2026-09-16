@@ -355,10 +355,10 @@ def display_sample_images(df):
         return
     
     categories_samples = {
-        'Good': "IMG_003.jpg",
-        'Defects - Hole': "IMG_012.jpg",
-        'Defects - Spot': "IMG_080.jpg",
-        'Defects - Scratch': "IMG_006.jpg"
+        'Good': "IMG_0221.jpg",
+        'Defects - Hole': "IMG_0559.jpg",
+        'Defects - Spot': "IMG_0590.jpg",
+        'Defects - Scratch': "IMG_0648_1.jpg"
     }
     
     selected_images = []
