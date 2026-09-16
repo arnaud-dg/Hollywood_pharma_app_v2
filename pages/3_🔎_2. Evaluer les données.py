@@ -18,6 +18,10 @@ from streamlit.components.v1 import html
 import base64
 import re
 
+# ====== S3 utils import ======
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+from utils_s3 import list_s3_files, read_file_from_s3, read_image_from_s3
+
 # Configuration de la page
 st.set_page_config(page_title="Dataset", page_icon="📊", layout="wide")
 
@@ -154,25 +158,18 @@ def get_file_hash(content_bytes, algo='sha256'):
         return "NA"
 
 @st.cache_data
-def load_image_dataset_from_local(data_path="data/dataset_analyze_save"):
-    """Charge et analyse le jeu de données d'images depuis le système de fichiers local"""
+def load_image_dataset_from_s3(data_path="data/dataset_analyze_save"):
+    """Charge et analyse le jeu de données d'images depuis S3"""
     
     image_data = []
     
-    if not os.path.exists(data_path):
-        st.error(f"Le dossier {data_path} n'existe pas")
-        return None
-    
     with st.spinner("Chargement et analyse des images..."):
-        # Lister tous les fichiers images
-        image_files = []
-        for root, dirs, files in os.walk(data_path):
-            for file in files:
-                if file.lower().endswith(('.jpg', '.jpeg', '.png')):
-                    image_files.append(os.path.join(root, file))
+        # Lister tous les fichiers images sous le préfixe S3
+        all_files = list_s3_files(prefix=data_path + "/")
+        image_files = [k for k in all_files if k.lower().endswith(('.jpg', '.jpeg', '.png'))]
         
         if not image_files:
-            st.error(f"Aucune image trouvée dans {data_path}")
+            st.error(f"Aucune image trouvée dans S3 sous {data_path}")
             return None
         
         progress_bar = st.progress(0)
@@ -181,20 +178,18 @@ def load_image_dataset_from_local(data_path="data/dataset_analyze_save"):
         for idx, file_path in enumerate(image_files):
             progress_bar.progress((idx + 1) / total_images)
             
-            # Extraire les informations du chemin
-            relative_path = os.path.relpath(file_path, data_path)
-            parts = relative_path.split(os.sep)
+            # Extraire les informations de la clé S3
+            relative_path = file_path[len(data_path) + 1:]
+            parts = relative_path.split("/")
             
             label = parts[0] if len(parts) > 0 else "NA"
             defect_type = parts[1] if label == "Defect" and len(parts) > 1 else "NA"
-            file_name = os.path.basename(file_path)
+            file_name = parts[-1]
             
-            # Lire l'image
-            try:
-                with open(file_path, 'rb') as f:
-                    img_bytes = f.read()
-            except Exception as e:
-                st.warning(f"Impossible de lire {file_path}: {e}")
+            # Lire l'image depuis S3
+            img_bytes = read_file_from_s3(file_path)
+            if not img_bytes:
+                st.warning(f"Impossible de lire {file_path}")
                 continue
             
             # Métadonnées
@@ -373,7 +368,7 @@ def display_sample_images(df):
         if not matching_rows.empty:
             file_path = matching_rows.iloc[0]["Chemin"]
             try:
-                img = Image.open(file_path)
+                img = Image.open(read_image_from_s3(file_path))
                 selected_images.append((cat, img))
             except Exception as e:
                 st.warning(f"Impossible de charger l'image pour la catégorie {cat}: {e}")
@@ -483,21 +478,21 @@ def create_class_distribution_plot(df):
     st.plotly_chart(fig, use_container_width=True)
 
 
-# Chargement automatique des données
+# Chargement automatique des données (préfixe S3)
 data_path = "data/dataset_analyze_save"
 
 # Vérifier si les données sont chargées
 if 'df' not in st.session_state:
-    st.session_state['df'] = load_image_dataset_from_local(data_path)
+    st.session_state['df'] = load_image_dataset_from_s3(data_path)
 
 # Vérifier si les données sont chargées
 if st.session_state['df'] is None:
     st.error(f"Impossible de charger les données depuis {data_path}")
     st.markdown("""
     ### Instructions :
-    1. Assurez-vous que le dossier `data/dataset_analyze_save` existe
-    2. Le dossier doit contenir des sous-dossiers avec vos images (ex: `Good/`, `Defect/`)
-    3. Rechargez la page pour relancer l'analyse
+    1. Vérifiez que le préfixe `data/dataset_analyze_save/` existe dans le bucket S3
+    2. Il doit contenir des sous-dossiers avec vos images (ex: `Good/`, `Defect/`)
+    3. Vérifiez la section `[aws]` des secrets, puis rechargez la page
     """)
 else:
     df = st.session_state['df']
